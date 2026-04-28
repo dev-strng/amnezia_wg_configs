@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AmneziaWG Gen — Генератор конфигов</title>
+  <meta name="description" content="Автоматическая проверка Cloudflare WARP эндпоинтов и генерация конфигов для AmneziaWG 2.0" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<div class="bg-orbs"><span></span><span></span><span></span></div>
+<div class="toast-container" id="toast-container"></div>
+
+<div class="app">
+
+  <!-- Header -->
+  <header>
+    <div class="logo">🛡</div>
+    <div>
+      <h1>Amnezia<span>WG</span> Gen</h1>
+      <p>Cloudflare WARP endpoint scanner &amp; config generator</p>
+    </div>
+    <span class="badge">v2.0</span>
+  </header>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="scanner">
+      <span class="tab-icon">🔍</span> Сканер
+    </button>
+    <button class="tab-btn" data-tab="config">
+      <span class="tab-icon">⚙️</span> Конфигуратор
+    </button>
+    <button class="tab-btn" data-tab="output">
+      <span class="tab-icon">📄</span> Готовый конфиг
+    </button>
+  </div>
+
+  <!-- ── TAB: Scanner ─────────────────────────────────────────── -->
+  <div class="tab-pane active" id="pane-scanner">
+
+    <div class="card">
+      <div class="card-title">Настройки сканирования</div>
+      <div class="form-grid">
+        <div class="field" style="grid-column:1/-1">
+          <label>IP-диапазоны (CIDR) — Enter для добавления</label>
+          <div class="tags-wrap" id="ranges-input">
+            <input class="tags-input" type="text" placeholder="например 162.159.192.0/24" />
+          </div>
+          <span class="hint">Cloudflare WARP диапазоны загружены по умолчанию</span>
+        </div>
+        <div class="field">
+          <label>Порты — Enter для добавления</label>
+          <div class="tags-wrap" id="ports-input">
+            <input class="tags-input" type="text" placeholder="например 2408" />
+          </div>
+        </div>
+        <div class="field">
+          <label>IP на диапазон</label>
+          <input type="number" id="count-per-range" value="50" min="1" max="255" />
+          <span class="hint">Случайная выборка из каждого диапазона</span>
+        </div>
+        <div class="field">
+          <label>Таймаут (сек)</label>
+          <input type="number" id="scan-timeout" value="2.0" min="0.5" max="10" step="0.5" />
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-primary" id="scan-btn">🔍 Запустить сканирование</button>
+        <button class="btn btn-ghost" id="stop-btn" style="display:none">⏹ Остановить</button>
+      </div>
+
+      <!-- Progress -->
+      <div class="progress-wrap">
+        <div class="progress-label">
+          <span>Прогресс: <strong id="progress-done">0</strong> / <span id="progress-total">0</span></span>
+          <strong id="progress-pct">0%</strong>
+        </div>
+        <div class="progress-bar-bg">
+          <div class="progress-bar" id="progress-bar"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-val" id="stat-total">0</div>
+        <div class="stat-lbl">Всего проверено</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-val green" id="stat-ok">0</div>
+        <div class="stat-lbl">Рабочих</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-val" id="stat-timeout">0</div>
+        <div class="stat-lbl">Таймаут</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-val orange" id="stat-avg">—</div>
+        <div class="stat-lbl">Средняя задержка</div>
+      </div>
+    </div>
+
+    <!-- Results -->
+    <div class="card">
+      <div class="card-title">Результаты</div>
+      <div id="empty-state" class="empty">
+        <div class="empty-icon">📡</div>
+        <p>Запустите сканирование, чтобы найти рабочие эндпоинты</p>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>IP-адрес</th>
+              <th>Порт</th>
+              <th>Задержка</th>
+              <th>Статус</th>
+              <th>Действие</th>
+            </tr>
+          </thead>
+          <tbody id="results-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div><!-- /scanner -->
+
+  <!-- ── TAB: Config Builder ──────────────────────────────────── -->
+  <div class="tab-pane" id="pane-config">
+
+    <!-- WARP quick register -->
+    <div class="card warp-card">
+      <div class="card-title">☁️ Cloudflare WARP — авторегистрация</div>
+      <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">
+        Зарегистрируйте бесплатный WARP-аккаунт и автоматически заполните ключи ниже.
+      </p>
+      <div class="btn-row" style="margin-top:0">
+        <button class="btn btn-cyan" id="warp-register-btn">☁️ Зарегистрировать WARP аккаунт</button>
+        <button class="btn btn-ghost" id="gen-keys-btn">🔑 Только сгенерировать ключи</button>
+      </div>
+    </div>
+
+    <!-- Interface -->
+    <div class="card">
+      <div class="card-title">Interface</div>
+      <div class="form-grid">
+        <div class="field" style="grid-column:1/-1">
+          <label>PrivateKey *</label>
+          <input type="text" id="cfg-private-key" placeholder="Ваш приватный ключ (base64)" />
+        </div>
+        <div class="field">
+          <label>Address</label>
+          <input type="text" id="cfg-address" value="172.16.0.2/32" />
+        </div>
+        <div class="field">
+          <label>DNS</label>
+          <input type="text" id="cfg-dns" value="1.1.1.1, 1.0.0.1" />
+        </div>
+        <div class="field">
+          <label>MTU</label>
+          <input type="number" id="awg-mtu" value="1280" min="576" max="1500" />
+        </div>
+      </div>
+    </div>
+
+    <!-- AWG obfuscation -->
+    <div class="card">
+      <div class="card-title">AmneziaWG 2.0 — параметры обфускации</div>
+      <div class="form-grid cols-3">
+
+        <div class="form-label-section">Junk пакеты</div>
+        <div class="field">
+          <label>Jc (кол-во мусорных пакетов)</label>
+          <input type="number" id="awg-jc" value="4" min="1" max="128" />
+          <span class="hint">Рекомендуется: 4–12</span>
+        </div>
+        <div class="field">
+          <label>Jmin (мин. размер, байт)</label>
+          <input type="number" id="awg-jmin" value="40" min="10" max="1000" />
+        </div>
+        <div class="field">
+          <label>Jmax (макс. размер, байт)</label>
+          <input type="number" id="awg-jmax" value="70" min="10" max="1280" />
+          <span class="hint">Jmax &lt; MTU системы</span>
+        </div>
+
+        <div class="form-sep"></div>
+        <div class="form-label-section">Паддинги сообщений</div>
+        <div class="field">
+          <label>S1 (init message padding)</label>
+          <input type="number" id="awg-s1" value="0" min="0" max="1280" />
+        </div>
+        <div class="field">
+          <label>S2 (response padding)</label>
+          <input type="number" id="awg-s2" value="0" min="0" max="1280" />
+        </div>
+        <div class="field"></div>
+
+        <div class="form-sep"></div>
+        <div class="form-label-section">Заголовки сообщений</div>
+        <div class="field">
+          <label>H1 (handshake init)</label>
+          <input type="number" id="awg-h1" value="1" min="1" />
+        </div>
+        <div class="field">
+          <label>H2 (handshake response)</label>
+          <input type="number" id="awg-h2" value="2" min="1" />
+        </div>
+        <div class="field">
+          <label>H3 (cookie)</label>
+          <input type="number" id="awg-h3" value="3" min="1" />
+        </div>
+        <div class="field">
+          <label>H4 (transport)</label>
+          <input type="number" id="awg-h4" value="4" min="1" />
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Peer -->
+    <div class="card">
+      <div class="card-title">Peer</div>
+      <div class="form-grid">
+        <div class="field" style="grid-column:1/-1">
+          <label>PublicKey * (ключ сервера)</label>
+          <input type="text" id="cfg-peer-key" placeholder="Публичный ключ сервера (base64)" />
+        </div>
+        <div class="field">
+          <label>Endpoint * (IP:Port)</label>
+          <input type="text" id="cfg-endpoint" placeholder="162.159.193.1:2408" />
+          <span class="hint">Выберите из результатов сканирования или введите вручную</span>
+        </div>
+        <div class="field">
+          <label>AllowedIPs</label>
+          <input type="text" id="cfg-allowed" value="0.0.0.0/0, ::/0" />
+        </div>
+        <div class="field">
+          <label>PersistentKeepalive</label>
+          <input type="number" id="awg-keepalive" value="25" min="0" max="65535" />
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-primary" id="generate-btn">⚡ Сгенерировать конфиг</button>
+      </div>
+    </div>
+
+  </div><!-- /config -->
+
+  <!-- ── TAB: Output ──────────────────────────────────────────── -->
+  <div class="tab-pane" id="pane-output">
+    <div id="output-section" style="display:none">
+      <div class="card">
+        <div class="card-title">Готовый конфиг</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <span style="font-size:12px;color:var(--text-muted);font-family:'JetBrains Mono',monospace" id="cfg-filename">amnezia.conf</span>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-ghost btn-sm" id="copy-btn">📋 Копировать</button>
+            <button class="btn btn-primary btn-sm" id="download-btn">⬇️ Скачать .conf</button>
+          </div>
+        </div>
+        <div class="config-out" id="config-out"></div>
+      </div>
+      <div class="card" style="background:rgba(34,197,94,0.05);border-color:rgba(34,197,94,0.15)">
+        <p style="font-size:13px;color:var(--text-dim);line-height:1.7">
+          💡 <strong>Как импортировать:</strong> Скачайте файл <code>.conf</code> и откройте его в 
+          <strong>AmneziaVPN</strong> через <em>«Добавить подключение» → «Импорт конфигурации»</em>.
+          Приложение автоматически определит формат AmneziaWG 2.0.
+        </p>
+      </div>
+    </div>
+
+    <div id="output-empty" class="empty" style="">
+      <div class="empty-icon">📄</div>
+      <p>Сначала сгенерируйте конфиг во вкладке <strong>Конфигуратор</strong></p>
+    </div>
+  </div><!-- /output -->
+
+</div><!-- /app -->
+
+<script src="app.js"></script>
+<script>
+  // Hide/show output empty state
+  const outputSection = document.getElementById('output-section');
+  const outputEmpty = document.getElementById('output-empty');
+  const observer = new MutationObserver(() => {
+    outputEmpty.style.display = outputSection.style.display === 'none' ? 'block' : 'none';
+  });
+  observer.observe(outputSection, { attributes: true, attributeFilter: ['style'] });
+</script>
+</body>
+</html>
